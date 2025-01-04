@@ -26,15 +26,13 @@ jobs:
           rm -rf ./dist
           yarn build
       
-      - name: Check if dist folder exists
+      - name: Check build output
         run: |
           if [ ! -d "./dist" ]; then
             echo "Build failed. dist folder does not exist."
             exit 1
           fi
-      
-      - name: Check build folder
-        run: ls -al ./dist
+          ls -al ./dist
       
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -61,12 +59,19 @@ jobs:
       - name: Upload to GCS
         run: gsutil -m rsync -r -d ./dist gs://${{ env.BUCKET_NAME }}
 
-      - name: Set Cache-Control
+      - name: Set Cache-Control for HTML
+        run: gsutil -m setmeta -h "Cache-Control:public, max-age=3600" gs://${{ env.BUCKET_NAME }}/**/*.html
+
+      - name: Set Cache-Control for Assets
         run: |
-         gsutil -m setmeta -h "Cache-Control:public, max-age=3600" gs://${{ env.BUCKET_NAME }}/**/*.html
-         gsutil -m setmeta -h "Cache-Control:public, max-age=31536000" gs://${{ env.BUCKET_NAME }}/**/*.css
-         gsutil -m setmeta -h "Cache-Control:public, max-age=31536000" gs://${{ env.BUCKET_NAME }}/**/*.js
-         gsutil -m setmeta -h "Cache-Control:public, max-age=31536000" gs://${{ env.BUCKET_NAME }}/**/*.{jpg,jpeg,png,gif}
+          for ext in css js; do
+            gsutil -m setmeta -h "Cache-Control:public, max-age=31536000" gs://${{ env.BUCKET_NAME }}/**/*.$ext || true
+          done
+          
+          # Optional media files - won't fail if not found
+          for ext in jpg jpeg png gif; do
+            gsutil -m setmeta -h "Cache-Control:public, max-age=31536000" gs://${{ env.BUCKET_NAME }}/**/*.$ext || true
+          done
 
   Clear_CDN_Cache:
     runs-on: ubuntu-latest
@@ -82,4 +87,4 @@ jobs:
         run: |
           gcloud compute url-maps invalidate-cdn-cache ${{ env.BUCKET_NAME }} \
             --path "/*" \
-            --async
+            --async || true
