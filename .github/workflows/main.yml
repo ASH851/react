@@ -58,7 +58,7 @@ jobs:
 
       - name: Deploy to GCP Storage Bucket
         run: |
-          gsutil -m rsync -r ./dist gs://your-gcp-bucket-name/  # Sync the dist folder with your GCP bucket
+          gsutil -m rsync -r ./dist gs://my-react-bckt/  # Sync the dist folder with your GCP bucket
 
   Invalidate_Cloud_CDN:
     runs-on: ubuntu-latest
