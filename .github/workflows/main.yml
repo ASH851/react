@@ -63,8 +63,10 @@ jobs:
 
       - name: Set Cache-Control
         run: |
-          gsutil -m setmeta -h "Cache-Control:public, max-age=3600" gs://${{ env.BUCKET_NAME }}/**/*.html
-          gsutil -m setmeta -h "Cache-Control:public, max-age=31536000" gs://${{ env.BUCKET_NAME }}/**/*.{css,js,jpg,jpeg,png,gif}
+         gsutil -m setmeta -h "Cache-Control:public, max-age=3600" gs://${{ env.BUCKET_NAME }}/**/*.html
+         gsutil -m setmeta -h "Cache-Control:public, max-age=31536000" gs://${{ env.BUCKET_NAME }}/**/*.css
+         gsutil -m setmeta -h "Cache-Control:public, max-age=31536000" gs://${{ env.BUCKET_NAME }}/**/*.js
+         gsutil -m setmeta -h "Cache-Control:public, max-age=31536000" gs://${{ env.BUCKET_NAME }}/**/*.{jpg,jpeg,png,gif}
 
   Clear_CDN_Cache:
     runs-on: ubuntu-latest
