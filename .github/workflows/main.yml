@@ -1,4 +1,4 @@
-name: Build and Deploy to AWS S3
+name: Build and Deploy to GCP Storage Bucket
 
 on:
   push:
@@ -40,7 +40,7 @@ jobs:
           name: NODE_FILES
           path: ./dist    # Make sure you're uploading the correct directory
 
-  Deploy_To_PROD_S3:
+  Deploy_To_GCP:
     runs-on: ubuntu-latest
     needs: Build_Node    # Depends on successful completion of the Build_Node job
     steps:
@@ -50,23 +50,22 @@ jobs:
           name: NODE_FILES
           path: ./dist    # Make sure you're downloading the correct artifact
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Setup GCP credentials
+        uses: google-github-actions/setup-gcloud@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          credentials_json: ${{ secrets.GCP_CREDENTIALS_JSON }}
 
-      - run: aws s3 sync ./dist s3://animesh-react-bucket --delete
+      - name: Deploy to GCP Storage Bucket
+        run: |
+          gsutil -m rsync -r ./dist gs://your-gcp-bucket-name/  # Sync the dist folder with your GCP bucket
 
-  Invalidate_Cloudfront_Cache:
+  Invalidate_Cloud_CDN:
     runs-on: ubuntu-latest
-    needs: Deploy_To_PROD_S3    # Depends on the Deploy_To_PROD_S3 job
+    needs: Deploy_To_GCP    # Depends on the Deploy_To_GCP job
     steps:
-      - name: Invalidate CloudFront
-        uses: chetan/invalidate-cloudfront-action@v2
-        env:
-          DISTRIBUTION: "ECLH0OAUX6AQQ"    # CloudFront distribution ID
-          PATHS: "/*"  # You can optimize this to only invalidate changed files
-          AWS_REGION: ${{ vars.AWS_REGION }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      - name: Invalidate Cloud CDN (Optional)
+        run: |
+          gcloud compute url-maps invalidate-cdn-cache your-url-map-name \
+            --path "/*" \
+            --project ${{ secrets.GCP_PROJECT_ID }}  # Invalidate Cloud CDN cache (optional)
