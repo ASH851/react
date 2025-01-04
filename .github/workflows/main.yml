@@ -1,9 +1,12 @@
-name: Build and Deploy to GCP Storage Bucket
-
+name: Build and Deploy to GCP
 on:
   push:
     branches:
-      - main  # You can modify this to match your production branch name
+      - main
+
+env:
+  BUCKET_NAME: my-react-bckt
+  PROJECT_ID: your-project-id
 
 jobs:
   Build_Node:
@@ -11,61 +14,70 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
+      
       - name: Setup NodeJS
         uses: actions/setup-node@v4
         with:
           node-version: '18.x'
-
+      
       - name: Install Dependencies
         run: |
           yarn install
-          
-          rm -rf ./dist    # Clear old build
-          yarn build       # Generate the build in 'dist'
-
+          rm -rf ./dist
+          yarn build
+      
       - name: Check if dist folder exists
         run: |
           if [ ! -d "./dist" ]; then
             echo "Build failed. dist folder does not exist."
             exit 1
           fi
-
-      - name: Check build folder (debugging)
-        run: ls -al ./dist   # List the dist folder contents
-
+      
+      - name: Check build folder
+        run: ls -al ./dist
+      
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: NODE_FILES
-          path: ./dist    # Make sure you're uploading the correct directory
+          path: ./dist
 
   Deploy_To_GCP:
     runs-on: ubuntu-latest
-    needs: Build_Node    # Depends on successful completion of the Build_Node job
+    needs: Build_Node
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
           name: NODE_FILES
-          path: ./dist    # Make sure you're downloading the correct artifact
+          path: ./dist
 
-      - name: Setup GCP credentials
-        uses: google-github-actions/setup-gcloud@v0  # Use v0 for stable release
+      - name: Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v0
         with:
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-          credentials_json: ${{ secrets.GCP_CREDENTIALS_JSON }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ env.PROJECT_ID }}
 
-      - name: Deploy to GCP Storage Bucket
+      - name: Upload to GCS
+        run: gsutil -m rsync -r -d ./dist gs://${{ env.BUCKET_NAME }}
+
+      - name: Set Cache-Control
         run: |
-          gsutil -m rsync -r ./dist gs://my-react-bckt/  # Sync the dist folder with your GCP bucket
+          gsutil -m setmeta -h "Cache-Control:public, max-age=3600" gs://${{ env.BUCKET_NAME }}/**/*.html
+          gsutil -m setmeta -h "Cache-Control:public, max-age=31536000" gs://${{ env.BUCKET_NAME }}/**/*.{css,js,jpg,jpeg,png,gif}
 
-  Invalidate_Cloud_CDN:
+  Clear_CDN_Cache:
     runs-on: ubuntu-latest
-    needs: Deploy_To_GCP    # Depends on the Deploy_To_GCP job
+    needs: Deploy_To_GCP
     steps:
-      - name: Invalidate Cloud CDN (Optional)
+      - name: Setup Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@v0
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ env.PROJECT_ID }}
+
+      - name: Invalidate CDN Cache
         run: |
-          gcloud compute url-maps invalidate-cdn-cache your-url-map-name \
+          gcloud compute url-maps invalidate-cdn-cache ${{ env.BUCKET_NAME }} \
             --path "/*" \
-            --project ${{ secrets.GCP_PROJECT_ID }}  # Invalidate Cloud CDN cache (optional)
+            --async
